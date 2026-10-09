@@ -1,135 +1,84 @@
-# 🚗 Bulgarian Cars Discord Bot
+# Bulgarian Cars Discord Bot
 
-A Discord bot that searches for cars on cars.bg and displays them with rich embeds and images.
+A small Discord bot for searching current car listings on [cars.bg](https://www.cars.bg/) and posting useful results as rich embeds.
 
-## 🚀 Quick Start
+## What it does
 
-### 1. Setup
+- Searches all listings or a supported brand/model.
+- Follows cars.bg pagination and stops when a page is empty.
+- Extracts listing IDs, titles, prices, links, and images from current card markup, with fallbacks for older markup variants.
+- Normalizes EUR, BGN, `€`, `лв`, and common thousands separators.
+- Removes duplicate listings and rejects failed HTTP responses instead of silently returning partial results.
+- Limits each search to 10 pages and posts at most 10 results to keep channels readable.
+- Runs searches with a two-minute timeout and allows at most four searches at once.
+- Uses a text fallback when Discord cannot send an embed.
+
+## Quick start
+
+Requirements: Go 1.23 or newer and a Discord application with a bot user.
+
+1. Create a bot in the [Discord Developer Portal](https://discord.com/developers/applications).
+2. Enable the **Message Content Intent** under the bot's privileged gateway intents.
+3. Copy `.env.example` to `.env` and set the token:
+
+   ```env
+   DISCORD_BOT_TOKEN=your_bot_token_here
+   ```
+
+4. Invite the bot with permission to view channels, read messages, send messages, and embed links.
+5. Start it:
+
+   ```bash
+   go mod download
+   go run .
+   ```
+
+The token is read from the environment. A local `.env` file is supported for development and is ignored by Git.
+
+## Commands
+
+| Command | Description |
+| --- | --- |
+| `!cars` | Search all brands and models. |
+| `!cars BMW` | Search one brand. |
+| `!cars BMW X5` | Search a brand and model. |
+| `!cars BMW 5` | Search a brand across five pages. |
+| `!cars BMW X5 5` | Search a brand/model across five pages. |
+| `!help` | Show command help. |
+| `!ping` | Check that the bot is responding. |
+
+Pages must be a whole number from 1 to 10. Model filters are applied for model IDs known by the scraper; an unknown model safely falls back to the selected brand rather than inventing a filter.
+
+The scraper currently knows these cars.bg brand filters: BMW, Audi, VW/Volkswagen, Mercedes-Benz, Toyota, Mitsubishi, Honda, Ford, Opel, Renault, Mazda, Citroën, Peugeot, Nissan, Škoda/Skoda, Fiat, Hyundai, Kia, Volvo, and Suzuki. An unsupported non-empty brand is rejected so it cannot accidentally return all cars.
+
+## Development
+
 ```bash
-# Clone the repository
-git clone <your-repo-url>
-cd bg-cars-discord-bot
-
-# Install dependencies
-go mod tidy
+gofmt -w $(rg --files -g '*.go')
+go test ./...
+go vet ./...
 ```
 
-### 2. Configure Discord Bot
-1. Create a Discord application at https://discord.com/developers/applications
-2. Create a bot and copy the token
-3. Create a `.env` file:
-```env
-DISCORD_BOT_TOKEN=your_bot_token_here
-```
+The repository includes fixture-based parser tests and unit tests for command parsing, embeds, and bot lifecycle behavior. Tests do not call Discord or cars.bg.
 
-### 3. Run the Bot
-```bash
-go run main.go
-```
+## Project layout
 
-## 🤖 Bot Commands
-
-| Command | Description | Example |
-|---------|-------------|---------|
-| `!cars` | Search all cars | `!cars` |
-| `!cars BMW` | Search by brand | `!cars BMW` |
-| `!cars BMW X5` | Search brand + model | `!cars BMW X5` |
-| `!cars BMW X5 5` | Search with page limit | `!cars BMW X5 5` |
-| `!help` | Show help message | `!help` |
-| `!ping` | Test bot response | `!ping` |
-
-## 📁 Project Structure
-
-```
-bg-cars-discord-bot/
-├── main.go                 # 🎯 Entry point (35 lines)
+```text
+.
+├── main.go                 # Configuration and process entry point
 ├── pkg/
-│   ├── bot/               # 🤖 Discord bot management
-│   │   └── bot.go         # Connection, events, commands
-│   ├── commands/          # ⚡ Bot commands
-│   │   └── cars.go        # Car search command
-│   ├── discord/           # 💬 Discord utilities
-│   │   └── embeds.go      # Rich message formatting
-│   └── scraper/           # 🕷️ Web scraping
-│       └── scraper.go     # Cars.bg scraper
-├── .env                   # 🔐 Bot token (create this)
-└── go.mod                 # 📦 Dependencies
+│   ├── bot/                # Discord session, intents, routing, shutdown
+│   ├── commands/           # !cars parsing and bounded search jobs
+│   ├── discord/            # Embed and text rendering
+│   └── scraper/            # cars.bg URL construction, HTTP, and HTML parsing
+├── .env.example
+└── .github/workflows/ci.yml
 ```
 
-## 🛠️ How It Works
+## Scraping notes
 
-### Simple Flow
-1. **User types** `!cars BMW X5` in Discord
-2. **Bot receives** the message
-3. **Scraper searches** cars.bg website
-4. **Bot sends back** car listings with images
+The scraper targets public cars.bg listing pages and expects normal HTML responses. It recognizes the site's `/offer/<id>` links, card/data attributes, price fields, images, and relative URLs. The site can change its markup at any time, so parser fixtures should be updated when the upstream structure changes. Keep request volume reasonable and do not commit scraped data or credentials.
 
-### Code Flow
-```
-Discord Message → bot.go → cars.go → scraper.go → embeds.go → Discord Response
-```
+## License
 
-## 🔧 Adding New Features
-
-### Add a New Command
-1. Create function in `pkg/commands/`
-2. Add route in `pkg/bot/bot.go` (line 95)
-3. Update help message
-
-### Customize Car Display
-- Edit `pkg/discord/embeds.go`
-- Modify `CreateCarEmbed()` function
-
-### Change Search Logic
-- Edit `pkg/scraper/scraper.go`
-- Modify `SearchCars()` function
-
-## 🐛 Troubleshooting
-
-**Bot not responding?**
-- Check your bot token in `.env`
-- Make sure bot has message permissions
-- Check console for error messages
-
-**Build errors?**
-```bash
-go mod tidy
-go mod vendor
-go build
-```
-
-**No cars found?**
-- Try broader search terms
-- Check if cars.bg is accessible
-- Increase page limit: `!cars BMW 5`
-
-## 📝 Development
-
-**Build the project:**
-```bash
-go build
-```
-
-**Run with live reload:**
-```bash
-# Install air first: go install github.com/cosmtrek/air@latest
-air
-```
-
-**Test individual packages:**
-```bash
-go test ./pkg/...
-```
-
-## 🎯 Features
-
-- ✅ Rich Discord embeds with car images
-- ✅ Bulgarian price formatting (BGN/EUR)
-- ✅ Async search (doesn't block Discord)
-- ✅ Error handling and fallbacks
-- ✅ Clean, modular code structure
-- ✅ Easy to extend with new commands
-
-## 📄 License
-
-This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+GPL-3.0-only. See [LICENSE](LICENSE).

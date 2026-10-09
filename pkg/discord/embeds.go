@@ -17,10 +17,15 @@ func CreateCarEmbed(offer scraper.Offer, resultIndex, totalResults int) *discord
 		cleanPrice = "Price not available"
 	}
 
+	title := strings.TrimSpace(offer.Title)
+	if title == "" {
+		title = "Car listing"
+	}
+
 	// Create Discord embed for the car
 	embed := &discordgo.MessageEmbed{
-		Title:       offer.Title,
-		Description: "Click the title to view the full listing",
+		Title:       title,
+		Description: "Open the listing for full details.",
 		Color:       0x3498db, // Blue color
 		Footer: &discordgo.MessageEmbedFooter{
 			Text: fmt.Sprintf("Result %d of %d", resultIndex, totalResults),
@@ -35,22 +40,22 @@ func CreateCarEmbed(offer scraper.Offer, resultIndex, totalResults int) *discord
 	}
 
 	// Add image if available
-	if offer.ImageURL != "" {
+	if strings.TrimSpace(offer.ImageURL) != "" {
 		embed.Image = &discordgo.MessageEmbedImage{
-			URL: offer.ImageURL,
+			URL: strings.TrimSpace(offer.ImageURL),
 		}
 	}
 
 	// Add link if available
-	if offer.ListLink != "" {
-		embed.URL = offer.ListLink
+	if strings.TrimSpace(offer.ListLink) != "" {
+		embed.URL = strings.TrimSpace(offer.ListLink)
 	}
 
 	// Add data item as a field if available
-	if offer.DataItem != "" {
+	if strings.TrimSpace(offer.DataItem) != "" {
 		embed.Fields = append(embed.Fields, &discordgo.MessageEmbedField{
 			Name:   "📋 Listing ID",
-			Value:  offer.DataItem,
+			Value:  strings.TrimSpace(offer.DataItem),
 			Inline: true,
 		})
 	}
@@ -78,9 +83,20 @@ func CreateSearchCompleteMessage(resultCount, totalResults int) string {
 
 // CreateCarFallbackMessage creates a fallback text message if embed fails
 func CreateCarFallbackMessage(offer scraper.Offer) string {
-	fallbackMsg := fmt.Sprintf("🚗 **%s**\n💰 %s", offer.Title, offer.Price)
-	if offer.ListLink != "" {
-		fallbackMsg += fmt.Sprintf("\n🔗 %s", offer.ListLink)
+	title := strings.TrimSpace(offer.Title)
+	if title == "" {
+		title = "Car listing"
+	}
+	price := strings.TrimSpace(offer.Price)
+	if price == "" {
+		price = "Price not available"
+	}
+	fallbackMsg := fmt.Sprintf("🚗 **%s**\n💰 %s", title, price)
+	if strings.TrimSpace(offer.ListLink) != "" {
+		fallbackMsg += fmt.Sprintf("\n🔗 %s", strings.TrimSpace(offer.ListLink))
+	}
+	if strings.TrimSpace(offer.DataItem) != "" {
+		fallbackMsg += fmt.Sprintf("\n📋 Listing ID: %s", strings.TrimSpace(offer.DataItem))
 	}
 	return fallbackMsg
 }

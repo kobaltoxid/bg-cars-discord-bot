@@ -7,23 +7,41 @@ import (
 	"net/http"
 	"net/url"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"golang.org/x/net/html"
 )
 
-// CarBrand represents different car brands
+// CarBrand is a cars.bg brand identifier. Unknown brands deliberately remain zero.
 type CarBrand int
 
 const (
-	BrandUnknown CarBrand = 0
-	BrandBMW     CarBrand = 10
-	BrandAudi    CarBrand = 20
-	BrandVW      CarBrand = 30
+	BrandUnknown    CarBrand = 0
+	BrandBMW        CarBrand = 10
+	BrandAudi       CarBrand = 8
+	BrandVW         CarBrand = 86
+	BrandMercedes   CarBrand = 54
+	BrandToyota     CarBrand = 80
+	BrandMitsubishi CarBrand = 57
+	BrandHonda      CarBrand = 31
+	BrandFord       CarBrand = 26
+	BrandOpel       CarBrand = 63
+	BrandRenault    CarBrand = 69
+	BrandMazda      CarBrand = 53
+	BrandCitroen    CarBrand = 17
+	BrandPeugeot    CarBrand = 64
+	BrandNissan     CarBrand = 60
+	BrandSkoda      CarBrand = 73
+	BrandFiat       CarBrand = 25
+	BrandHyundai    CarBrand = 33
+	BrandKia        CarBrand = 38
+	BrandVolvo      CarBrand = 85
+	BrandSuzuki     CarBrand = 77
 )
 
-// Offer represents a car listing
+// Offer represents a car listing.
 type Offer struct {
 	DataItem string
 	Title    string
@@ -32,297 +50,413 @@ type Offer struct {
 	Price    string
 }
 
-// BrandNameToID maps a string (case-insensitive) to a CarBrand type
-func BrandNameToID(brand string) CarBrand {
-	switch strings.ToLower(brand) {
-	case "bmw":
-		return BrandBMW
-	case "audi":
-		return BrandAudi
-	case "vw", "volkswagen":
-		return BrandVW
-	default:
-		return BrandUnknown
-	}
+var brandIDs = map[string]CarBrand{
+	"bmw": BrandBMW, "bayerische motoren werke": BrandBMW,
+	"audi": BrandAudi,
+	"vw":   BrandVW, "volkswagen": BrandVW, "volks wagen": BrandVW,
+	"mercedes": BrandMercedes, "mercedes-benz": BrandMercedes, "mercedes benz": BrandMercedes,
+	"toyota": BrandToyota, "mitsubishi": BrandMitsubishi, "honda": BrandHonda,
+	"ford": BrandFord, "opel": BrandOpel, "renault": BrandRenault,
+	"mazda": BrandMazda, "citroen": BrandCitroen, "citroën": BrandCitroen, "peugeot": BrandPeugeot,
+	"nissan": BrandNissan, "skoda": BrandSkoda, "škoda": BrandSkoda,
+	"fiat": BrandFiat, "hyundai": BrandHyundai, "kia": BrandKia,
+	"volvo": BrandVolvo, "suzuki": BrandSuzuki,
 }
 
-// ModelNameToIDs maps model names to their IDs
+func BrandNameToID(brand string) CarBrand { return brandIDs[strings.ToLower(strings.TrimSpace(brand))] }
+
 var modelNameToIDs = map[string][]string{
-	"5series":  {"1000003", "122", "123", "124", "125", "126", "127", "128", "129", "130", "131", "132"},
-	"5-series": {"1000003", "122", "123", "124", "125", "126", "127", "128", "129", "130", "131", "132"},
-	"5":        {"1000003", "122", "123", "124", "125", "126", "127", "128", "129", "130", "131", "132"},
+	"5series":   {"1000003", "122", "123", "124", "125", "126", "127", "128", "129", "130", "131", "132"},
+	"5-series":  {"1000003", "122", "123", "124", "125", "126", "127", "128", "129", "130", "131", "132"},
+	"5":         {"1000003", "122", "123", "124", "125", "126", "127", "128", "129", "130", "131", "132"},
+	"a4":        {"76"},
+	"outlander": {"1015"},
+	"insignia":  {"1118"},
+	"berlingo":  {"255"},
+	"mazda3":    {"763"},
+	"mazda-3":   {"763"},
+	"mazda6":    {"766"},
+	"mazda-6":   {"766"},
+	"350z":      {"1058"},
+	"octavia":   {"1308"},
+	"santa-fe":  {"540"},
+	"santa fe":  {"540"},
+	"rio":       {"608"},
+	"v50":       {"1456"},
+	"liana":     {"1343"},
+	"corsa":     {"1114"},
+	"c3":        {"260"},
 }
 
 func ModelNameToIDs(model string) []string {
-	return modelNameToIDs[strings.ToLower(model)]
+	return modelNameToIDs[strings.ToLower(strings.TrimSpace(model))]
 }
 
-// calcUrl builds the search URL
 func calcUrl(brand CarBrand, page int, modelIDs []string) string {
-	base := "https://www.cars.bg/carslist.php"
 	params := url.Values{}
-	if brand != 0 {
+	if brand != BrandUnknown {
 		params.Set("subm", "1")
 		params.Set("add_search", "1")
 		params.Set("typeoffer", "1")
-		params.Set("brandId", fmt.Sprintf("%d", brand))
+		params.Set("brandId", strconv.Itoa(int(brand)))
 	}
-	params.Set("page", fmt.Sprintf("%d", page))
-	for _, mid := range modelIDs {
-		params.Add("models[]", mid)
+	params.Set("page", strconv.Itoa(page))
+	for _, modelID := range modelIDs {
+		if strings.TrimSpace(modelID) != "" {
+			params.Add("models[]", modelID)
+		}
 	}
-	return base + "?" + params.Encode()
+	return "https://www.cars.bg/carslist.php?" + params.Encode()
 }
 
-// SearchCars performs the car search and returns results
 func SearchCars(ctx context.Context, maxPages int, brand string, model string) ([]Offer, error) {
-	var allOffers []Offer
-
-	carBrandId := BrandNameToID(brand)
-	modelIDs := ModelNameToIDs(model)
-
+	brand = strings.TrimSpace(brand)
+	brandID := BrandNameToID(brand)
+	if brand != "" && brandID == BrandUnknown {
+		return nil, fmt.Errorf("unsupported car brand %q", brand)
+	}
+	if maxPages <= 0 {
+		return []Offer{}, nil
+	}
+	var all []Offer
 	for page := 1; page <= maxPages; page++ {
-		url := calcUrl(carBrandId, page, modelIDs)
-		fmt.Printf("Scraping page %d: %s\n", page, url)
-
-		offersOnPage, err := GetOffersByUrl(ctx, url)
+		offers, err := GetOffersByUrl(ctx, calcUrl(brandID, page, ModelNameToIDs(model)))
 		if err != nil {
-			fmt.Printf("Error parsing offers on page %d: %v\n", page, err)
-			continue
+			return nil, fmt.Errorf("scrape page %d: %w", page, err)
 		}
-		allOffers = append(allOffers, offersOnPage...)
-
-		// Stop if no offers found (likely reached end)
-		if len(offersOnPage) == 0 {
-			fmt.Printf("No offers found on page %d, stopping search\n", page)
+		all = append(all, offers...)
+		if len(offers) == 0 {
 			break
 		}
 	}
-
-	return allOffers, nil
+	return all, nil
 }
 
-// GetOffersByUrl fetches and parses offers from a URL
-func GetOffersByUrl(ctx context.Context, url string) ([]Offer, error) {
-	req, err := http.NewRequestWithContext(ctx, "GET", url, nil)
+func GetOffersByUrl(ctx context.Context, target string) ([]Offer, error) {
+	return GetOffersByURLWithClient(ctx, target, &http.Client{Timeout: 10 * time.Second})
+}
+
+// GetOffersByURLWithClient is the injectable form of GetOffersByUrl.
+func GetOffersByURLWithClient(ctx context.Context, target string, client *http.Client) ([]Offer, error) {
+	if client == nil {
+		client = http.DefaultClient
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, target, nil)
 	if err != nil {
 		return nil, err
 	}
-
-	client := &http.Client{Timeout: 10 * time.Second}
+	req.Header.Set("User-Agent", "bg-cars-discord-bot/1.0 (+https://www.cars.bg/)")
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
 	resp, err := client.Do(req)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
-
+	if resp.StatusCode < http.StatusOK || resp.StatusCode >= http.StatusMultipleChoices {
+		return nil, fmt.Errorf("cars.bg returned HTTP %s", resp.Status)
+	}
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, err
 	}
-
 	return ExtractAllOffers(string(body))
 }
 
-// ExtractAllOffers parses HTML and extracts car offers
 func ExtractAllOffers(htmlStr string) ([]Offer, error) {
 	doc, err := html.Parse(strings.NewReader(htmlStr))
 	if err != nil {
 		return nil, err
 	}
-
 	var offers []Offer
-
-	var findOffers func(*html.Node)
-	findOffers = func(n *html.Node) {
-		if n.Type == html.ElementNode && n.Data == "div" {
-			var dataItem, title string
-			for _, attr := range n.Attr {
-				if attr.Key == "data-item" {
-					dataItem = attr.Val
+	seen := map[string]bool{}
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n.Type == html.ElementNode && (n.Data == "div" || n.Data == "article" || n.Data == "li") {
+			if item := parseOffer(n); item != nil {
+				key := item.ListLink
+				if key == "" {
+					key = item.DataItem
 				}
-				if attr.Key == "title" {
-					title = attr.Val
-				}
-			}
-			if dataItem != "" {
-				offer := Offer{
-					DataItem: dataItem,
-					Title:    title,
-					ImageURL: findImageURL(n),
-					ListLink: findListLink(n),
-					Price:    findPrice(n),
-				}
-				offers = append(offers, offer)
-				return
-			}
-		}
-		for c := n.FirstChild; c != nil; c = c.NextSibling {
-			findOffers(c)
-		}
-	}
-	findOffers(doc)
-	return offers, nil
-}
-
-// parsePrice cleans and formats price text properly
-func parsePrice(rawPrice string) string {
-	// Clean up basic formatting
-	price := strings.TrimSpace(rawPrice)
-	price = strings.ReplaceAll(price, "\n", " ")
-	price = strings.ReplaceAll(price, "\t", " ")
-
-	// Replace multiple spaces with single space
-	for strings.Contains(price, "  ") {
-		price = strings.ReplaceAll(price, "  ", " ")
-	}
-
-	if price == "" {
-		return "Price not available"
-	}
-
-	// Use regex to extract price amounts and currencies
-	priceRegex := regexp.MustCompile(`(\d+(?:[,\s]\d{3})*(?:\.\d{2})?)\s*(BGN|EUR|лв\.?)`)
-	matches := priceRegex.FindAllStringSubmatch(price, -1)
-
-	if len(matches) > 0 {
-		// Prefer BGN price if available, otherwise use the first match
-		for _, match := range matches {
-			if len(match) >= 3 {
-				amount := match[1]
-				currency := match[2]
-
-				// Clean up amount formatting
-				amount = strings.ReplaceAll(amount, " ", ",")
-
-				// Prefer BGN or лв (Bulgarian Lev)
-				if currency == "BGN" || strings.Contains(currency, "лв") {
-					if strings.Contains(currency, "лв") {
-						currency = "BGN"
-					}
-					return fmt.Sprintf("%s %s", amount, currency)
-				}
-			}
-		}
-
-		// If no BGN found, return the first valid price
-		if len(matches[0]) >= 3 {
-			amount := matches[0][1]
-			currency := matches[0][2]
-			amount = strings.ReplaceAll(amount, " ", ",")
-			return fmt.Sprintf("%s %s", amount, currency)
-		}
-	}
-
-	// Fallback: try to extract just numbers and common currency indicators
-	numberRegex := regexp.MustCompile(`(\d+(?:[,\s]\d{3})*(?:\.\d{2})?)`)
-	currencyRegex := regexp.MustCompile(`(BGN|EUR|лв\.?)`)
-
-	numberMatches := numberRegex.FindAllString(price, -1)
-	currencyMatches := currencyRegex.FindAllString(price, -1)
-
-	if len(numberMatches) > 0 && len(currencyMatches) > 0 {
-		amount := numberMatches[0]
-		currency := currencyMatches[0]
-
-		// Clean up amount
-		amount = strings.ReplaceAll(amount, " ", ",")
-
-		// Normalize currency
-		if strings.Contains(currency, "лв") {
-			currency = "BGN"
-		}
-
-		return fmt.Sprintf("%s %s", amount, currency)
-	}
-
-	// Final fallback: return cleaned original text
-	return price
-}
-
-// Helper functions for parsing HTML elements
-func findPrice(n *html.Node) string {
-	var price string
-	var f func(*html.Node)
-	f = func(nn *html.Node) {
-		if nn.Type == html.ElementNode && nn.Data == "h6" {
-			for _, attr := range nn.Attr {
-				if attr.Key == "class" &&
-					strings.Contains(attr.Val, "card__title") &&
-					strings.Contains(attr.Val, "mdc-typography") &&
-					strings.Contains(attr.Val, "mdc-typography--headline6") &&
-					strings.Contains(attr.Val, "price") {
-					price = getTextContent(nn)
+				if key != "" && !seen[key] {
+					seen[key] = true
+					offers = append(offers, *item)
 					return
 				}
 			}
 		}
-		for c := nn.FirstChild; c != nil; c = c.NextSibling {
-			if price == "" {
-				f(c)
-			}
+		for child := n.FirstChild; child != nil; child = child.NextSibling {
+			walk(child)
 		}
 	}
-	f(n)
-	// Parse and format the price properly
-	return parsePrice(price)
+	walk(doc)
+	return offers, nil
 }
 
+func parseOffer(n *html.Node) *Offer {
+	dataItem, link := attr(n, "data-item"), findListLink(n)
+	if dataItem == "" {
+		dataItem = offerIDFromURL(link)
+	}
+	if dataItem == "" && link == "" {
+		return nil
+	}
+	return &Offer{DataItem: dataItem, Title: findTitle(n), ImageURL: findImageURL(n), ListLink: link, Price: findPrice(n)}
+}
+
+func findTitle(n *html.Node) string {
+	if title := strings.TrimSpace(attr(n, "title")); title != "" {
+		return title
+	}
+	var best string
+	walkElements(n, func(node *html.Node) {
+		class := strings.ToLower(attr(node, "class"))
+		if best == "" && (hasClass(class, "title") || hasClass(class, "name") || hasClass(class, "card__title")) {
+			text := cleanText(getTextContent(node))
+			if text != "" && !looksLikePrice(text) {
+				best = text
+			}
+		}
+	})
+	return best
+}
+
+func findPrice(n *html.Node) string {
+	var candidates []string
+	walkElements(n, func(node *html.Node) {
+		class := strings.ToLower(attr(node, "class"))
+		if classContains(class, "price") || attr(node, "data-price") != "" {
+			text := cleanText(attr(node, "data-price") + " " + getTextContent(node))
+			if text != "" {
+				candidates = append(candidates, text)
+			}
+		}
+	})
+	for _, candidate := range candidates {
+		if price := parsePrice(candidate); price != "Price not available" {
+			return price
+		}
+	}
+	if price := parsePrice(getTextContent(n)); price != "Price not available" {
+		return price
+	}
+	return "Price not available"
+}
+
+var pricePattern = regexp.MustCompile(`(?i)([0-9]+(?:[.,][0-9]{3})*(?:[.,][0-9]{1,2})?|[0-9]+(?:[ .][0-9]{3})+(?:[.,][0-9]{1,2})?)\s*(EUR|€|BGN|лв\.?|лева?)`)
+var backgroundURLPattern = regexp.MustCompile(`(?i)background-image\s*:\s*url\(\s*['"]?([^'")\s]+)['"]?\s*\)`)
+
+func parsePrice(raw string) string {
+	matches := pricePattern.FindAllStringSubmatch(cleanText(raw), -1)
+	if len(matches) == 0 {
+		return "Price not available"
+	}
+	chosen := matches[0]
+	for _, match := range matches {
+		if strings.EqualFold(match[2], "EUR") || match[2] == "€" {
+			chosen = match
+			break
+		}
+	}
+	amount := normalizeAmount(chosen[1])
+	currency := strings.ToUpper(chosen[2])
+	if currency == "€" {
+		currency = "EUR"
+	}
+	if strings.HasPrefix(strings.ToLower(currency), "лв") || strings.EqualFold(currency, "лева") {
+		currency = "BGN"
+	}
+	return amount + " " + currency
+}
+
+func normalizeAmount(value string) string {
+	value = strings.ReplaceAll(strings.ReplaceAll(strings.TrimSpace(value), "\u00a0", ""), " ", "")
+	if strings.Contains(value, ",") && strings.Contains(value, ".") {
+		if dot := strings.LastIndex(value, "."); len(value)-dot-1 == 2 {
+			integer := strings.ReplaceAll(value[:dot], ",", "")
+			return formatThousands(integer) + "." + value[dot+1:]
+		}
+		if comma := strings.LastIndex(value, ","); len(value)-comma-1 == 2 {
+			integer := strings.ReplaceAll(value[:comma], ".", "")
+			return formatThousands(integer) + "." + value[comma+1:]
+		}
+	}
+	if strings.Contains(value, ",") && strings.Contains(value, ".") {
+		if strings.LastIndex(value, ",") > strings.LastIndex(value, ".") {
+			value = strings.ReplaceAll(value, ".", "")
+			value = strings.ReplaceAll(value, ",", ".")
+		} else {
+			value = strings.ReplaceAll(value, ",", "")
+		}
+	} else if strings.Count(value, ",") == 1 && len(value)-strings.LastIndex(value, ",")-1 <= 2 {
+		value = strings.ReplaceAll(value, ",", ".")
+	} else if strings.Count(value, ".") == 1 && len(value)-strings.LastIndex(value, ".")-1 == 3 {
+		// cars.bg commonly uses a dot as the thousands separator.
+		value = strings.ReplaceAll(value, ".", "")
+	} else {
+		value = strings.ReplaceAll(value, ",", "")
+	}
+	if f, err := strconv.ParseFloat(value, 64); err == nil && f == float64(int64(f)) {
+		return formatThousands(strconv.FormatInt(int64(f), 10))
+	}
+	return strings.ReplaceAll(value, ".", ",")
+}
+
+func formatThousands(value string) string {
+	for i := len(value) - 3; i > 0; i -= 3 {
+		value = value[:i] + "," + value[i:]
+	}
+	return value
+}
+
+func findImageURL(n *html.Node) string {
+	var result string
+	walkElements(n, func(node *html.Node) {
+		if result != "" {
+			return
+		}
+		if node.Data == "img" {
+			result = firstNonEmpty(attr(node, "src"), firstSrcset(attr(node, "srcset")))
+		}
+		if result == "" {
+			result = backgroundURL(attr(node, "style"))
+		}
+	})
+	return absoluteURL(result)
+}
+
+func findListLink(n *html.Node) string {
+	var offerLink, explicitFallback string
+	walkElements(n, func(node *html.Node) {
+		if node.Data != "a" && attr(node, "list-link") == "" && attr(node, "href") == "" && attr(node, "data-href") == "" {
+			return
+		}
+		for _, candidate := range []struct {
+			raw      string
+			explicit bool
+		}{
+			{attr(node, "list-link"), true},
+			{attr(node, "href"), false},
+			{attr(node, "data-href"), true},
+		} {
+			rawLink := candidate.raw
+			link := absoluteURL(rawLink)
+			if link == "" {
+				continue
+			}
+			if strings.Contains(strings.ToLower(linkPath(link)), "/offer/") {
+				if offerLink == "" {
+					offerLink = link
+				}
+			} else if candidate.explicit && explicitFallback == "" {
+				explicitFallback = link
+			}
+		}
+	})
+	if offerLink != "" {
+		return offerLink
+	}
+	return explicitFallback
+}
+
+func linkPath(link string) string {
+	parsed, err := url.Parse(link)
+	if err != nil {
+		return link
+	}
+	return parsed.Path
+}
+
+func offerIDFromURL(link string) string {
+	parsed, err := url.Parse(link)
+	if err != nil {
+		return ""
+	}
+	parts := strings.Split(strings.Trim(parsed.Path, "/"), "/")
+	for i := 0; i+1 < len(parts); i++ {
+		if strings.EqualFold(parts[i], "offer") && parts[i+1] != "" {
+			return parts[i+1]
+		}
+	}
+	return ""
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+func firstSrcset(value string) string {
+	fields := strings.Fields(value)
+	if len(fields) == 0 {
+		return ""
+	}
+	return strings.Split(fields[0], ",")[0]
+}
+func backgroundURL(style string) string {
+	match := backgroundURLPattern.FindStringSubmatch(style)
+	if len(match) > 1 {
+		return match[1]
+	}
+	return ""
+}
+func absoluteURL(value string) string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return ""
+	}
+	base, _ := url.Parse("https://www.cars.bg/")
+	parsed, err := url.Parse(value)
+	if err != nil {
+		return value
+	}
+	return base.ResolveReference(parsed).String()
+}
+func attr(n *html.Node, name string) string {
+	for _, a := range n.Attr {
+		if strings.EqualFold(a.Key, name) {
+			return a.Val
+		}
+	}
+	return ""
+}
+func hasClass(classes, wanted string) bool {
+	for _, class := range strings.Fields(classes) {
+		if class == wanted {
+			return true
+		}
+	}
+	return false
+}
+func classContains(classes, wanted string) bool {
+	for _, class := range strings.Fields(classes) {
+		if strings.Contains(class, wanted) {
+			return true
+		}
+	}
+	return false
+}
+func cleanText(value string) string {
+	return strings.Join(strings.Fields(strings.ReplaceAll(value, "\u00a0", " ")), " ")
+}
+func looksLikePrice(value string) bool { return pricePattern.MatchString(value) }
+func walkElements(n *html.Node, fn func(*html.Node)) {
+	if n.Type == html.ElementNode {
+		fn(n)
+	}
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		walkElements(child, fn)
+	}
+}
 func getTextContent(n *html.Node) string {
 	if n.Type == html.TextNode {
 		return n.Data
 	}
-	var sb strings.Builder
-	for c := n.FirstChild; c != nil; c = c.NextSibling {
-		sb.WriteString(getTextContent(c))
+	var b strings.Builder
+	for child := n.FirstChild; child != nil; child = child.NextSibling {
+		b.WriteString(getTextContent(child))
 	}
-	return sb.String()
-}
-
-func findImageURL(n *html.Node) string {
-	var imgURL string
-	var f func(*html.Node)
-	f = func(nn *html.Node) {
-		if nn.Type == html.ElementNode && nn.Data == "div" {
-			for _, attr := range nn.Attr {
-				if attr.Key == "style" && strings.Contains(attr.Val, "background-image") {
-					re := regexp.MustCompile(`url\(['"]?([^'")]+)['"]?\)`)
-					matches := re.FindStringSubmatch(attr.Val)
-					if len(matches) > 1 {
-						imgURL = matches[1]
-						return
-					}
-				}
-			}
-		}
-		for c := nn.FirstChild; c != nil; c = c.NextSibling {
-			if imgURL == "" {
-				f(c)
-			}
-		}
-	}
-	f(n)
-	return imgURL
-}
-
-func findListLink(n *html.Node) string {
-	var link string
-	var f func(*html.Node)
-	f = func(nn *html.Node) {
-		if nn.Type == html.ElementNode && nn.Data == "a" {
-			for _, attr := range nn.Attr {
-				if attr.Key == "list-link" {
-					link = attr.Val
-					return
-				}
-			}
-		}
-		for c := nn.FirstChild; c != nil; c = c.NextSibling {
-			if link == "" {
-				f(c)
-			}
-		}
-	}
-	f(n)
-	return link
+	return b.String()
 }

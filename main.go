@@ -1,9 +1,9 @@
 package main
 
 import (
-	"fmt"
 	"log"
 	"os"
+	"strings"
 
 	"bg-cars-discord-bot/pkg/bot"
 
@@ -12,13 +12,12 @@ import (
 
 func main() {
 	// Load environment variables from .env file
-	err := godotenv.Load()
-	if err != nil {
-		fmt.Println("Warning: .env file not found, using system environment variables")
+	if err := godotenv.Load(); err != nil && !os.IsNotExist(err) {
+		log.Printf("warning: could not load .env: %v", err)
 	}
 
 	// Get Discord bot token from environment
-	token := os.Getenv("DISCORD_BOT_TOKEN")
+	token := strings.TrimSpace(os.Getenv("DISCORD_BOT_TOKEN"))
 	if token == "" {
 		log.Fatal("❌ DISCORD_BOT_TOKEN environment variable is required")
 	}
@@ -30,16 +29,14 @@ func main() {
 	}
 
 	// Start the bot (this blocks until interrupted)
-	err = discordBot.Start()
-	if err != nil {
+	if err := discordBot.Start(); err != nil {
 		log.Fatalf("❌ Failed to start bot: %v", err)
 	}
 
 	// Graceful shutdown
-	err = discordBot.Stop()
-	if err != nil {
+	if err := discordBot.Stop(); err != nil {
 		log.Printf("⚠️ Error during shutdown: %v", err)
 	}
 
-	fmt.Println("👋 Bot stopped successfully")
+	log.Println("👋 Bot stopped successfully")
 }
