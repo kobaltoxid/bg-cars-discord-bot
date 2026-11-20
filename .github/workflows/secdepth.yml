@@ -13,6 +13,6 @@ permissions:
 
 jobs:
   scan:
-    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@4879ee46dc9ce62c224a708da11d869aabe5e5eb
+    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@ff5d669b7b639d5339eb40eb100ceff3a098c293
     with:
       ecosystem: go
