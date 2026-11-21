@@ -67,7 +67,7 @@ When you open a pull request against `main`, GitHub Actions runs SecDepth on the
 
 A passing check means the scanner finished. To see what it found and what it could check, open **SecDepth dependency scan** from the pull request's **Checks** tab and download the report from **Artifacts**.
 
-To request a model review, add the `secdepth-triage` label to the pull request. The runtime waits for a successful scan of the latest commit and asks Claude to review one finding if SecDepth flagged it. The review saves its verdict separately and links to the original scan. [Pull request triage guide](https://github.com/kobaltoxid/security-runtime/blob/main/docs/triage-a-finding.md#review-a-pull-request-scan)
+To request a model review, add the `secdepth-triage` label after the SecDepth check passes, then choose **Run workflow** under **PR label triage** in Security Runtime. If SecDepth flagged a finding, Claude reviews one and the runtime saves a separate verdict linked to the original scan. [Pull request triage guide](https://github.com/kobaltoxid/security-runtime/blob/main/docs/triage-a-finding.md#review-a-pull-request-scan)
 
 ## Project layout
 
