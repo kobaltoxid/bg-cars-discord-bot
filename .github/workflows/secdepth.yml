@@ -1,0 +1,18 @@
+name: SecDepth dependency scan
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: secdepth-pr-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  scan:
+    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@ff5d669b7b639d5339eb40eb100ceff3a098c293
+    with:
+      ecosystem: go

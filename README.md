@@ -61,6 +61,14 @@ go vet ./...
 
 The repository includes fixture-based parser tests and unit tests for command parsing, embeds, and bot lifecycle behavior. Tests do not call Discord or cars.bg.
 
+## Review the dependency scan
+
+When you open a pull request against `main`, GitHub Actions runs SecDepth on the exact commit you submitted. The scan reads the Go module files and checks the declared dependencies against known advisories without building the bot.
+
+A passing check means the scanner finished. To see what it found and what it could check, open **SecDepth dependency scan** from the pull request's **Checks** tab and download the report from **Artifacts**.
+
+To request a model review, add the `secdepth-triage` label after the SecDepth check passes, then choose **Run workflow** under **PR label triage** in Security Runtime. If SecDepth flagged a finding, Claude reviews one and the runtime saves a separate verdict linked to the original scan. [Pull request triage guide](https://github.com/kobaltoxid/security-runtime/blob/main/docs/triage-a-finding.md#review-a-pull-request-scan)
+
 ## Project layout
 
 ```text
@@ -72,7 +80,9 @@ The repository includes fixture-based parser tests and unit tests for command pa
 │   ├── discord/            # Embed and text rendering
 │   └── scraper/            # cars.bg URL construction, HTTP, and HTML parsing
 ├── .env.example
-└── .github/workflows/ci.yml
+└── .github/workflows/
+    ├── ci.yml
+    └── secdepth.yml
 ```
 
 ## Scraping notes
