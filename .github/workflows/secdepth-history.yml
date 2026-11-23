@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   source:
-    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@146949b4a632698224b75324ebc1632b4cfcc04d
+    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@c3cf8492e8e4fcd4e260a71e6296011cf1232b91
     with:
       ecosystem: go
 
@@ -42,7 +42,7 @@ jobs:
 
   release:
     needs: build
-    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@146949b4a632698224b75324ebc1632b4cfcc04d
+    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@c3cf8492e8e4fcd4e260a71e6296011cf1232b91
     with:
       release-artifact: release-build
       release-file: bg-cars-bot
