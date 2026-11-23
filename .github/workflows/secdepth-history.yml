@@ -1,0 +1,48 @@
+name: SecDepth history pilot
+
+on:
+  push:
+    branches: [ci/secdepth-history-pilot]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  source:
+    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@146949b4a632698224b75324ebc1632b4cfcc04d
+    with:
+      ecosystem: go
+
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Build the release binary
+        run: go build -trimpath -o dist/bg-cars-bot .
+
+      - name: Upload the release binary
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: release-build
+          path: dist/bg-cars-bot
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    needs: build
+    uses: kobaltoxid/security-runtime/.github/workflows/scan.yml@146949b4a632698224b75324ebc1632b4cfcc04d
+    with:
+      release-artifact: release-build
+      release-file: bg-cars-bot
